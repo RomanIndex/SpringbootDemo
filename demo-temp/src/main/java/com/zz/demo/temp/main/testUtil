@@ -1,0 +1,67 @@
+GIT项目源码地址：https://github.com/apache/dubbo
+
+》》》》》发现一个感觉很优秀的git项目（dubbo+sb+mybatis，含代码生成）：https://github.com/G-little/priest
+
+
+dubbo的demo搭建主要参考（版本太低）：https://www.cnblogs.com/geekdc/p/9267341.html
+
+
+=======》》》先把dubbo项目构建起来，并调用成功，最后再来搭建dubbo-admin我觉得！
+
+
+步步贴图博文（超详细，百度关键字太重要，带上2.x）：https://blog.csdn.net/qq_29102545/article/details/87368620
+
+
+
+---------------zookeeper配置中心--------------------------------------------------------------------------------------------------------------------------
+不直接操作zk，而是通过修改publish properties的方式（publish server要重新发布） 实现 动态配置
+
+-- 每个Subscribe端（包括服务 提供方 和 消费方）：
+（1）什么时候实例化 自己的client（根据constant，读取自己需要的 属性值）
+【【（2）如何实现 监听，并动态更新自己的值】】--------------（用 数据库 连接 做测试！）
+（3）publish server是会 “经常”宕机的，如何确保自身服务不受影响（publish后，数据存在于zk上，publish server宕机不影响）
+----PS：每个Subscribe端，根据自己的配置，去zk读取 需要的 属性值
+
+-- publish端（只有一个，也单独设置成一个服务）：CuratorFramework client
+【【（1）如何实例化（zk有则读取，无则读取本地 并 同步创建到zk上）】】
+（2）如何同步到zk
+（3）最好也能够监听zk，发现改动（zk上被手动改动），及时反馈
+
+？？用curator的话，就不需要用原始的ZKClient这种，实现CRUD（只在publish上存在，且目前只通过修改properties文件实现）
+
+Solving Steps：
+（1）建立publish server（服务也接入zk，但是没有和其他服务有调用，只用来管理zk配置）
+（2）publish server 初始化 实现（将自己的值同步到zk上？？？会有争议的地方，到底以publish server的为准，还是zk上的）
+（3）subscribe启动，并监听zk的值，关注自己需要的值的变化
+
+--------------------------------外面如何接入zk配置中心------------------------------------------------
+最OK就是：提供一个jar包，给 接入的服务，，，统一配置 api？接口都放一个api吗？
+另外：统一配置，提供一个properties文件，自定义（zk 大于 本地）从zookeeper读取，自己需要的配置
+
+
+
+dubbo-admin安装教程（被坑？）：https://github.com/apache/dubbo-admin
+
+
+dubbo-master（里面并没有admin）：https://www.cnblogs.com/DFX339/p/8855329.html
+
+
+**********************遇到的问题*************************************
+1、LoggerFactory is not a Logback LoggerContext but Logback is on the classpath
+===》》
+<dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+            <scope>test</scope>
+        </dependency>
+**********这两个不能少，且从parent继承不过来，问题就是这个里面的logging里面多了一个ch.qos.logback，排除掉就好了
+
+2、启动这样：Disconnected from the target VM, address: '127.0.0.1:64262', transport: 'socket'
+程序有问题：provider端是，即引入了web，又引入了tomcat，而web里面是包含tomcat的
+consumer端是，@Service引用错了，要用spring的，而不是dubbo的，否则controller有错，但是编译没有提示
+
+3、报空指针：（解决了上面问题，最后还是回到了这个问题。。。。。。。。。。。）
+大概问题定位：针对SpringBoot+dubbo，就服务消费者Consumer而言，是需要先扫描 dubbo bean,然后再扫描  SpringBoot bean,就服务提供者而言 恰好相反；
+但是。。。怎么可以不用xml文件，，怎么在项目里面怎么配置？？（有人推荐dubbo配置用xml配置会好一点？？）
+（1）说是spring boot版本太高，只能用1.X的？？？（）XXXX
+都是OK的，不用xml配置，也不用换spring boot版本，就是启动类少了注解（@EnableDubbo），加上后，zkui里面也可以看到了
